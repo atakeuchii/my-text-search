@@ -37,4 +37,7 @@ jobs:
             ${{ runner.os }}-lein-
 
       - name: Run tests
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: lein test
