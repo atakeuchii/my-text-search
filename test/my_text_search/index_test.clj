@@ -1,6 +1,7 @@
 (ns my-text-search.index-test
   (:require [clojure.test :refer [deftest is]]
-            [my-text-search.index :as idx]))
+            [my-text-search.index :as idx]
+            [my-text-search.tokenizer :as tok]))
 
 (deftest empty-index-shape
   (let [ix (idx/empty-index)]
@@ -65,3 +66,18 @@
     (is (= 3 (:terms s)))
     (is (= 4 (:postings s)))
     (is (= (double (/ 4 3)) (:avg-posting s)))))
+
+(deftest segments-and-word-dictionary
+  (is (= ["a" "b" "日本酒" "x1"] (tok/segments "A&B 日本酒 x1")))
+  (let [ix (reduce idx/add-document (idx/empty-index)
+                   ["日本酒 純米" "日本酒造 蔵元"])]
+    (is (= #{0} (idx/word-posting ix "日本酒")))
+    (is (= #{1} (idx/word-posting ix "日本酒造")))
+    (is (= #{0 1} (idx/posting ix "日本")))))
+
+(deftest words-with-prefix-enumerates-sorted
+  (let [ix (reduce idx/add-document (idx/empty-index)
+                   ["日本酒 純米" "日本酒造 蔵元" "日本語 文法" "焼酎 芋"])]
+    (is (= ["日本酒" "日本酒造"] (map first (idx/words-with-prefix ix "日本酒"))))
+    (is (= ["日本語" "日本酒" "日本酒造"] (sort (map first (idx/words-with-prefix ix "日本")))))
+    (is (= [] (map first (idx/words-with-prefix ix "存在しない"))))))

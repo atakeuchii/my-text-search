@@ -28,3 +28,18 @@
            (q/hydrate df [0 2])))
     (is (= [] (q/hydrate df [])))
     (is (= [2 0] (map :doc-id (q/hydrate df [2 0]))))))
+
+(deftest wildcard-expands-and-ors
+  (let [wf (fn [prefix]
+             (->> {"日本酒" [0], "日本酒造" [1], "日本語" [3], "焼酎" [4]}
+                  (filter (fn [[w _]] (.startsWith ^String w prefix)))
+                  (sort-by first)))]
+    (is (= ["日本酒" "日本酒造"] (map first (q/wildcard-terms wf "日本酒"))))
+    (is (= [0 1] (vec (q/wildcard-search wf "日本酒"))))
+    (is (= [0 1 3] (vec (q/wildcard-search wf "日本"))))
+    (is (= 1 (count (q/wildcard-terms wf "日本" :max-terms 1))))
+    (is (= [] (vec (q/wildcard-search wf "存在しない"))))))
+
+(deftest wildcard-query-detection
+  (is (true?  (q/wildcard-query? "日本酒*")))
+  (is (false? (q/wildcard-query? "日本酒"))))

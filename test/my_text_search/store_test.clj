@@ -67,3 +67,40 @@
       (is (= [{:doc-id 0 :text "日本酒の醸造"}]
              (q/search-docs pf df "日本" :op :or :limit 1)))
       (lsm/close db))))
+
+(deftest word-dictionary-persists
+  (let [dir (temp-dir)]
+    (let [ix (reduce idx/add-document (idx/empty-index) ["日本酒 純米" "日本酒造 蔵元"])
+          db (lsm/open dir)]
+      (store/persist-index! db ix)
+      (lsm/close db))
+    (let [db (lsm/open dir)]
+      (is (= (sorted-set 0) (store/get-word db "日本酒")))
+      (is (= (sorted-set 1) (store/get-word db "日本酒造")))
+      (lsm/close db))))
+
+(deftest scan-words-matches-in-memory
+  (let [dir (temp-dir)
+        ix  (reduce idx/add-document (idx/empty-index)
+                    ["日本酒 純米" "日本酒造 蔵元" "日本語 文法" "焼酎 芋"])]
+    (let [db (lsm/open dir)]
+      (store/persist-index! db ix)
+      (lsm/close db))
+    (let [db (lsm/open dir)]
+      (is (= (vec (idx/words-with-prefix ix "日本酒"))
+             (vec (store/scan-words db "日本酒"))))
+      (is (= [] (vec (store/scan-words db "存在しない"))))
+      (lsm/close db))))
+
+(deftest wildcard-over-store
+  (let [dir (temp-dir)
+        ix  (reduce idx/add-document (idx/empty-index)
+                    ["日本酒 純米" "日本酒造 蔵元" "日本語 文法" "STORE front"])]
+    (let [db (lsm/open dir)] (store/persist-index! db ix) (lsm/close db))
+    (let [db (lsm/open dir)
+          wf #(store/scan-words db %)
+          pf #(store/get-posting db %)]
+      (is (= [0 1] (vec (q/wildcard-search wf "日本酒"))))
+      (is (= [3]   (vec (q/wildcard-search wf "STORE"))))
+      (is (= [0 1] (vec (q/search-any pf wf "日本酒*"))))
+      (lsm/close db))))
