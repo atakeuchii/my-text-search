@@ -71,3 +71,8 @@
     (put-doc! store id text))
   (set-next-id! store (:next-id index))
   store)
+
+(defn all-words
+  [store]
+  (->> (lsm/scan store "w:" "x")
+       (map (fn [[k _]] (subs k (count "w:"))))))

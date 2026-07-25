@@ -104,3 +104,15 @@
       (is (= [3]   (vec (q/wildcard-search wf "STORE"))))
       (is (= [0 1] (vec (q/search-any pf wf "日本酒*"))))
       (lsm/close db))))
+
+(deftest all-words-returns-full-dictionary
+  (let [dir (temp-dir)
+        ix  (reduce idx/add-document (idx/empty-index)
+                    ["日本酒 純米" "日本酒造 蔵元" "焼酎 芋"])]
+    (let [db (lsm/open dir)]
+      (store/persist-index! db ix)
+      (lsm/close db))
+    (let [db (lsm/open dir)]
+      (is (= #{"日本酒" "純米" "日本酒造" "蔵元" "焼酎" "芋"}
+             (set (store/all-words db))))
+      (lsm/close db))))
