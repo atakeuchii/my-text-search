@@ -14,7 +14,8 @@
   (is (= [] (q/or-postings []))))
 
 (deftest search-test
-  (let [pf {"日本" [0 2] "本酒" [0]}
+  ;; posting-fn は {文書ID -> TF} を返す
+  (let [pf {"日本" (sorted-map 0 1 2 3) "本酒" (sorted-map 0 2)}
         f #(get pf %)]
     (is (= [0] (vec (q/search f "日本酒"))))
     (is (= [0 2] (vec (q/search f "日本酒" :op :or))))
@@ -31,7 +32,10 @@
 
 (deftest wildcard-expands-and-ors
   (let [wf (fn [prefix]
-             (->> {"日本酒" [0], "日本酒造" [1], "日本語" [3], "焼酎" [4]}
+             (->> {"日本酒"   (sorted-map 0 2)
+                   "日本酒造" (sorted-map 1 1)
+                   "日本語"   (sorted-map 3 1)
+                   "焼酎"     (sorted-map 4 1)}
                   (filter (fn [[w _]] (.startsWith ^String w prefix)))
                   (sort-by first)))]
     (is (= ["日本酒" "日本酒造"] (map first (q/wildcard-terms wf "日本酒"))))

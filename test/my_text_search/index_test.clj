@@ -12,28 +12,30 @@
 
 (deftest empty-index-postings-stay-sorted
   (let [p (-> (:postings (idx/empty-index))
-              (assoc "本酒" #{0})
-              (assoc "日本" #{0}))]
+              (assoc "本酒" (sorted-map 0 1))
+              (assoc "日本" (sorted-map 0 1)))]
     (is (= ["日本" "本酒"] (keys p)))))
 
 (deftest add-one-document
   (let [ix (idx/add-document (idx/empty-index) "日本酒")]
     (is (= 1 (:next-id ix)))
     (is (= "日本酒" (get-in ix [:docs 0])))
-    (is (= #{0} (get-in ix [:postings "日本"])))
-    (is (= #{0} (get-in ix [:postings "本酒"])))))
+    (is (= {0 1} (idx/posting ix "日本")))
+    (is (= #{0} (set (keys (idx/posting ix "日本")))))
+    (is (= #{0} (set (keys (idx/posting ix "本酒")))))))
 
 (deftest shared-term-collects-doc-ids-sorted
   (let [ix (-> (idx/empty-index)
                (idx/add-document "日本酒")     ; id 0
                (idx/add-document "日本語")     ; id 1
                (idx/add-document "本日"))]     ; id 2
-    (is (= #{0 1} (get-in ix [:postings "日本"])))   ; 「日本」は0,1
-    (is (= [0 1] (seq (get-in ix [:postings "日本"]))))))
+    (is (= (sorted-map 0 1 1 1) (get-in ix [:postings "日本"])))   ; 「日本」は0,1 に各1回
+    (is (= [0 1] (keys (get-in ix [:postings "日本"]))))))
 
-(deftest duplicate-term-in-one-doc-counted-once
+(deftest duplicate-term-in-one-doc-counts-tf
+  ;; 「あああ」は bigram 「ああ」を2回含むので TF=2
   (let [ix (idx/add-document (idx/empty-index) "あああ")]
-    (is (= #{0} (get-in ix [:postings "ああ"])))))
+    (is (= (sorted-map 0 2) (get-in ix [:postings "ああ"])))))
 
 (deftest reduce-over-corpus
   (let [ix (reduce idx/add-document (idx/empty-index)
@@ -45,10 +47,10 @@
   (let [ix (-> (idx/empty-index)
                (idx/add-document "日本酒")    ; id 0
                (idx/add-document "日本語"))]   ; id 1
-    (is (= #{0 1} (idx/posting ix "日本")))
-    (is (= #{0}   (idx/posting ix "本酒")))
-    ;; 未知 term は空集合（nil ではない）
-    (is (= #{} (idx/posting ix "焼酎")))
+    (is (= (sorted-map 0 1 1 1) (idx/posting ix "日本")))
+    (is (= (sorted-map 0 1)     (idx/posting ix "本酒")))
+    ;; 未知 term は空マップ（nil ではない）
+    (is (= {} (idx/posting ix "焼酎")))
     (is (sorted? (idx/posting ix "焼酎")))))
 
 (deftest doc-text-lookup
@@ -71,9 +73,9 @@
   (is (= ["a" "b" "日本酒" "x1"] (tok/segments "A&B 日本酒 x1")))
   (let [ix (reduce idx/add-document (idx/empty-index)
                    ["日本酒 純米" "日本酒造 蔵元"])]
-    (is (= #{0} (idx/word-posting ix "日本酒")))
-    (is (= #{1} (idx/word-posting ix "日本酒造")))
-    (is (= #{0 1} (idx/posting ix "日本")))))
+    (is (= (sorted-map 0 1) (idx/word-posting ix "日本酒")))
+    (is (= (sorted-map 1 1) (idx/word-posting ix "日本酒造")))
+    (is (= (sorted-map 0 1 1 1) (idx/posting ix "日本")))))
 
 (deftest words-with-prefix-enumerates-sorted
   (let [ix (reduce idx/add-document (idx/empty-index)

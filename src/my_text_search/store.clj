@@ -17,12 +17,12 @@
   (.decode (Base64/getDecoder) s))
 
 (defn put-posting!
-  [store term doc-ids]
-  (lsm/put store (term-key term) (bytes->str (codec/encode-posting doc-ids))))
+  [store term doc->tf]
+  (lsm/put store (term-key term) (bytes->str (codec/encode-posting doc->tf))))
 
 (defn put-word!
-  [store word doc-ids]
-  (lsm/put store (word-key word) (bytes->str (codec/encode-posting doc-ids))))
+  [store word doc->tf]
+  (lsm/put store (word-key word) (bytes->str (codec/encode-posting doc->tf))))
 
 (defn get-word
   [store word]
@@ -60,6 +60,10 @@
 (defn set-next-id!
   [store n]
   (lsm/put store next-id-key (str n)))
+
+(defn doc-count
+  [store]
+  (get-next-id store))
 
 (defn persist-index!
   [store index]

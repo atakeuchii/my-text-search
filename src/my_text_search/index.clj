@@ -8,38 +8,40 @@
    :docs {}
    :next-id 0})
 
+(defn- add-freqs
+  [m freqs doc-id]
+  (reduce (fn [acc [k cnt]]
+            (update acc k (fnil assoc (sorted-map)) doc-id cnt))
+          m freqs))
+
 (defn add-document
   [index text]
   (let [doc-id (:next-id index)
-        terms (distinct (tok/tokenize text))
-        words (distinct (tok/segments text))]
-    (letfn [(add-all [m keys doc-id]
-              (reduce
-               (fn [acc k] (update acc k (fnil conj (sorted-set)) doc-id))
-               m keys))]
-      (-> index
-          (update :docs assoc doc-id text)
-          (update :postings add-all terms doc-id)
-          (update :words add-all words doc-id)
-          (assoc :next-id (inc doc-id))))))
+        term-freqs (frequencies (tok/tokenize text))
+        word-freqs (frequencies (tok/segments text))]
+    (-> index
+        (update :docs assoc doc-id text)
+        (update :postings add-freqs term-freqs doc-id)
+        (update :words add-freqs word-freqs doc-id)
+        (assoc :next-id (inc doc-id)))))
 
 (defn posting
   [index term]
-  (get-in index [:postings term] (sorted-set)))
+  (get-in index [:postings term] (sorted-map)))
 
 (defn word-posting
   [index word]
-  (get-in index [:words word] (sorted-set)))
+  (get-in index [:words word] (sorted-map)))
+
+(defn doc-text
+  [index doc-id]
+  (get-in index [:docs doc-id]))
 
 (defn words-with-prefix
   [index prefix]
   (->> (subseq (:words index) >= prefix)
        (take-while (fn [[w _]] (.startsWith ^String w prefix)))
        (map (fn [[w ids]] [w ids]))))
-
-(defn doc-text
-  [index doc-id]
-  (get-in index [:docs doc-id]))
 
 (defn stats
   "索引の健全性を見るための統計。

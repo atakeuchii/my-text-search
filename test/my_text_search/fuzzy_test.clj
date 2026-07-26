@@ -36,7 +36,11 @@
 
 (deftest fuzzy-search-ors-candidate-word-postings
   (let [words ["日本酒" "日木酒" "日本語" "焼酎"]
-        wpf   {"日本酒" [0 2], "日木酒" [1], "日本語" [4], "焼酎" [3]}]
+        ;; word-posting-fn は {文書ID -> TF} を返す
+        wpf   {"日本酒" (sorted-map 0 2 2 1)
+               "日木酒" (sorted-map 1 1)
+               "日本語" (sorted-map 4 1)
+               "焼酎"   (sorted-map 3 1)}]
     (is (= [0 1 2 4] (vec (fz/fuzzy-search words #(get wpf %) "日本酒" 1))))
     (is (= [0 2]     (vec (fz/fuzzy-search words #(get wpf %) "日本酒" 0))))
     (is (= [0 1 2]   (vec (fz/fuzzy-search words #(get wpf %) "日木酒" 1))))))

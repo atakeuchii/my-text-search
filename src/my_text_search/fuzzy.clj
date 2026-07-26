@@ -67,5 +67,5 @@
 (defn fuzzy-search
   [words word-posting-fn query k]
   (->> (fuzzy-terms words query k)
-       (map word-posting-fn)
+       (map (comp keys #(or (word-posting-fn %) (sorted-map))))
        q/or-postings))

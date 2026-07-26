@@ -24,15 +24,33 @@
     (is (= n (read-uvarint-from (codec/uvarint->bytes n))))))
 
 (deftest posting-roundtrip
-  (doseq [s [(sorted-set 0) (sorted-set 0 3 5 12) (sorted-set 1 2 3 4 5) (sorted-set 7 100 1000 100000) (sorted-set)]]
-    (is (= s (codec/decode-posting (codec/encode-posting s))))))
+  (doseq [m [(sorted-map 0 1)
+             (sorted-map 0 3 3 1 5 2 12 1)
+             (sorted-map 1 1 2 1 3 1 4 1 5 1)
+             (sorted-map 7 10 100 1 1000 5 100000 2)
+             (sorted-map)]]
+    (is (= m (codec/decode-posting (codec/encode-posting m))))))
+
+(deftest posting-tf-over-varint-boundary
+  ;; TF も varint なので 127 を跨いでも壊れない
+  (let [m (sorted-map 0 127 1 128 2 300)]
+    (is (= m (codec/decode-posting (codec/encode-posting m))))))
 
 (deftest posting-known-bytes
-  (is (= [0 4 0 3 2 7]
-         (vec (codec/encode-posting (sorted-set 0 3 5 12))))))
+  ;; {0 3, 3 1, 5 2} -> flags1, count3, delta[0 3 2], tf[3 1 2]
+  (is (= [1 3 0 3 2 3 1 2]
+         (vec (codec/encode-posting (sorted-map 0 3 3 1 5 2))))))
 
 (deftest delta-keeps-bytes-small
-  (is (= 5 (alength (codec/encode-posting(sorted-set 100 200 300))))))
+  ;; flags(1) + count(1) + delta[100 100 100](3) + tf[1 1 1](3) = 8
+  ;; delta を取らなければ 300 が 2 バイトになり 9 バイトへ増える
+  (is (= 8 (alength (codec/encode-posting (sorted-map 100 1 200 1 300 1))))))
 
-(deftest first-byte-is-flags-zero
-  (is (zero? (first (codec/encode-posting (sorted-set 5 9))))))
+(deftest first-byte-is-flags-with-tf-bit
+  ;; TF セクションありなので bit0 が立つ
+  (is (= 1 (first (codec/encode-posting (sorted-map 5 1 9 1))))))
+
+(deftest posting-decodes-old-format-as-tf1
+  ;; 旧形式(flags=0, TFなし)は全 tf=1 として読める（後方互換）
+  (let [old (byte-array [0 3 0 3 2])]
+    (is (= (sorted-map 0 1 3 1 5 1) (codec/decode-posting old)))))
