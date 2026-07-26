@@ -41,13 +41,13 @@
     (reduce union2 postings)))
 
 (defn search
-  "posting-fn: term -> 昇順文書ID列(nil可)。
+  "posting-fn: term -> {文書ID -> TF}。
    query を index と同じトークナイザで分解し、AND(既定)/OR で結合してヒット文書IDの昇順列を返す。"
   [posting-fn query & {:keys [op] :or {op :and}}]
   (let [terms (distinct (tok/tokenize query))]
     (if (empty? terms)
       ()
-      (let [postings (map #(or (posting-fn %) ()) terms)]
+      (let [postings (map #(keys (or (posting-fn %) (sorted-map))) terms)]
         (case op
           :and (and-postings postings)
           :or (or-postings postings))))))
@@ -60,7 +60,7 @@
 (defn wildcard-search
   [word-scan-fn prefix & {:keys [max-terms]}]
   (->> (wildcard-terms word-scan-fn prefix :max-terms max-terms)
-       (map second)
+       (map (comp keys second))
        or-postings))
 
 (defn hydrate
