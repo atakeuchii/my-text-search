@@ -116,3 +116,16 @@
       (is (= #{"日本酒" "純米" "日本酒造" "蔵元" "焼酎" "芋"}
              (set (store/all-words db))))
       (lsm/close db))))
+
+(deftest doc-length-persists
+  (let [dir (temp-dir)
+        ix  (reduce idx/add-document (idx/empty-index)
+                    ["日本酒" "日本酒 日本酒 日本酒 の 醸造" "焼酎 芋"])]
+    (let [db (lsm/open dir)]
+      (store/persist-index! db ix)
+      (lsm/close db))
+    (let [db (lsm/open dir)]
+      (is (= 8 (store/get-doc-length db 1)))
+      (is (= 12 (store/get-total-len db)))
+      (is (= 4.0 (store/avg-doc-length db)))
+      (lsm/close db))))

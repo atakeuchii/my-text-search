@@ -6,6 +6,7 @@
   {:postings (sorted-map)
    :words (sorted-map)
    :docs {}
+   :doc-lengths {}
    :next-id 0})
 
 (defn- add-freqs
@@ -18,9 +19,11 @@
   [index text]
   (let [doc-id (:next-id index)
         term-freqs (frequencies (tok/tokenize text))
-        word-freqs (frequencies (tok/segments text))]
+        word-freqs (frequencies (tok/segments text))
+        dl (reduce + 0 (vals term-freqs))]
     (-> index
         (update :docs assoc doc-id text)
+        (update :doc-lengths assoc doc-id dl)
         (update :postings add-freqs term-freqs doc-id)
         (update :words add-freqs word-freqs doc-id)
         (assoc :next-id (inc doc-id)))))
@@ -36,6 +39,17 @@
 (defn doc-text
   [index doc-id]
   (get-in index [:docs doc-id]))
+
+(defn doc-length
+  [index doc-id]
+  (get-in index [:doc-lengths doc-id] 0))
+
+(defn avg-doc-length
+  [index]
+  (let [ls (vals (:doc-lengths index))]
+    (if (empty? ls)
+      0.0
+      (/ (double (reduce + 0 ls)) (count ls)))))
 
 (defn words-with-prefix
   [index prefix]

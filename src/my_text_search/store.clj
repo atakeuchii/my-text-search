@@ -4,9 +4,11 @@
   (:import [java.util Base64]))
 
 (def ^:private next-id-key "m:next-id")
+(def ^:private total-len-key "m:total-len")
 (defn- term-key ^String [term] (str "t:" term))
 (defn- word-key ^String [word] (str "w:" word))
 (defn- doc-key  ^String [doc-id] (str "d:" doc-id))
+(defn- len-key  ^String [doc-id] (str "l:" doc-id))
 
 (defn- bytes->str
   ^String [^bytes bs]
@@ -61,6 +63,26 @@
   [store n]
   (lsm/put store next-id-key (str n)))
 
+(defn put-doc-length!
+  [store doc-id len]
+  (lsm/put store (len-key doc-id) (str len)))
+
+(defn get-doc-length
+  [store doc-id]
+  (if-let [s (lsm/get store (len-key doc-id))]
+    (Long/parseLong s)
+    0))
+
+(defn set-total-len!
+  [store n]
+  (lsm/put store total-len-key (str n)))
+
+(defn get-total-len
+  [store]
+  (if-let [s (lsm/get store total-len-key)]
+    (Long/parseLong s)
+    0))
+
 (defn doc-count
   [store]
   (get-next-id store))
@@ -73,6 +95,9 @@
     (put-word! store word ids))
   (doseq [[id text] (:docs index)]
     (put-doc! store id text))
+  (doseq [[id len] (:doc-lengths index)]
+    (put-doc-length! store id len))
+  (set-total-len! store (reduce + 0 (vals (:doc-lengths index))))
   (set-next-id! store (:next-id index))
   store)
 
@@ -80,3 +105,10 @@
   [store]
   (->> (lsm/scan store "w:" "x")
        (map (fn [[k _]] (subs k (count "w:"))))))
+
+(defn avg-doc-length
+  [store]
+  (let [n (doc-count store)]
+    (if (zero? n)
+      0.0
+      (/ (double (get-total-len store)) n))))
