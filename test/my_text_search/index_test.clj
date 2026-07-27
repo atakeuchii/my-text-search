@@ -83,3 +83,10 @@
     (is (= ["日本酒" "日本酒造"] (map first (idx/words-with-prefix ix "日本酒"))))
     (is (= ["日本語" "日本酒" "日本酒造"] (sort (map first (idx/words-with-prefix ix "日本")))))
     (is (= [] (map first (idx/words-with-prefix ix "存在しない"))))))
+
+(deftest doc-length-and-avgdl
+  (let [ix (reduce idx/add-document (idx/empty-index)
+                   ["日本酒" "日本酒 日本酒 日本酒 の 醸造" "焼酎 芋"])]
+    (is (= 2 (idx/doc-length ix 0)))
+    (is (= 8 (idx/doc-length ix 1)))
+    (is (= 4.0 (idx/avg-doc-length ix)))))
