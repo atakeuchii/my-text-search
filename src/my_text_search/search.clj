@@ -2,7 +2,9 @@
   (:require [clojure.string :as str]
             [my-text-search.tokenizer :as tok]
             [my-text-search.query :as q]
-            [my-text-search.fuzzy :as fz]))
+            [my-text-search.fuzzy :as fz]
+            [my-text-search.score :as score]
+            [my-text-search.store :as store]))
 
 (defn search
   [sources query & {:keys [op k] :or {op :and k 1}}]
@@ -17,3 +19,39 @@
       
       :else
       (q/search posting-fn query :op op))))
+
+(defn- field-sources
+  "field-boosts {フィールド -> boost} から score 用の field-sources を作る。"
+  [store field-boosts]
+  (for [[field boost] field-boosts]
+    {:field field
+     :posting-fn #(store/get-field-posting store field %)
+     :n-docs (store/doc-count store)
+     :dl-fn #(store/get-field-length store field %)
+     :avgdl (store/field-avg-doc-length store field)
+     :boost boost}))
+
+(defn- strip-notation
+  [^String q]
+  (if (or (str/ends-with? q "*") (str/ends-with? q "~"))
+    (subs q 0 (dec (count q))) q))
+
+(defn ranked-search
+  "マッチング(記法で振り分け)で候補を集め、field-boosts で合成 BM25 ランキング。
+   field-boosts: {:name 3.0 :description 1.0}"
+  [store field-boosts query & {:keys [op k] :or {op :and k 1}}]
+  (let [srcs (field-sources store field-boosts)
+        cands (cond
+                (str/ends-with? query "*")
+                (q/wildcard-search #(store/scan-words store %)
+                                   (strip-notation query))
+
+                (str/ends-with? query "~")
+                (fz/fuzzy-search (store/all-words store)
+                                 #(store/get-word store %)
+                                 (tok/normalize (strip-notation query))
+                                 k)
+
+                :else
+                (q/union-search (map :posting-fn srcs) query :op op))]
+    (score/bm25-multi-field-rank srcs (strip-notation query) cands)))

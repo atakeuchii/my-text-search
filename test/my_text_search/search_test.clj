@@ -10,7 +10,7 @@
 
 (deftest search-test
   (let [dir (temp-dir)
-        ix  (reduce idx/add-document (idx/empty-index)
+        ix  (reduce idx/add-text (idx/empty-index)
                     ["日本酒 純米" "日木酒 タイポ" "日本酒 冷酒" "焼酎 芋" "日本語 文法"])]
     (let [db (lsm/open dir)] (store/persist-index! db ix) (lsm/close db))
     (let [db (lsm/open dir)
@@ -21,4 +21,18 @@
       (is (= [0 2]     (vec (search/search sources "日本酒"))))
       (is (= [0 2 4]   (vec (search/search sources "日本*"))))
       (is (= [0 1 2 4] (vec (search/search sources "日本酒~"))))
+      (lsm/close db))))
+
+(deftest ranked-search-combines-matching-and-boost
+  (let [dir (temp-dir)
+        ix  (reduce idx/add-document (idx/empty-index)
+                    [{:name "獺祭 純米大吟醸"   :description "華やかな日本酒"}
+                     {:name "久保田 千寿"       :description "獺祭に似た日本酒"}
+                     {:name "獺祭スパークリング" :description "発泡性の酒"}])]
+    (let [db (lsm/open dir)] (store/persist-index! db ix) (lsm/close db))
+    (let [db (lsm/open dir)]
+      ;; ワイルドカード×銘柄重視: 銘柄が獺祭の doc0 が先頭
+      (is (= 0 (:doc-id (first (search/ranked-search db {:name 3.0 :description 1.0} "獺祭*")))))
+      ;; ワイルドカード×説明重視: 説明に獺祭の doc1 が先頭
+      (is (= 1 (:doc-id (first (search/ranked-search db {:name 1.0 :description 3.0} "獺祭*")))))
       (lsm/close db))))

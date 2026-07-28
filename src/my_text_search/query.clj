@@ -63,6 +63,13 @@
        (map (comp keys second))
        or-postings))
 
+(defn union-search
+  [field-posting-fns query & {:keys [op] :or {op :and}}]
+  (->> field-posting-fns
+       (mapcat #(search % query :op op))
+       distinct
+       sort))
+
 (defn hydrate
   "文書ID列に本文を添える。doc-fn: 文書ID -> 本文。
    [{:doc-id id :text \"...\"} ...] を返す。"
