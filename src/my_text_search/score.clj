@@ -72,3 +72,21 @@
          (map (fn [id] {:doc-id id
                         :score (bm25-score posting-fn n-docs dl-fn avgdl terms id :k1 k1 :b b)}))
          (sort-by (juxt (comp - :score) :doc-id)))))
+
+(defn bm25-multi-field-score
+  "複数フィールドの BM25 を boost で合成した文書スコア。
+   field-sources: [{:field :posting-fn :n-docs :dl-fn :avgdl :boost} ...]
+   posting-fn: term -> {doc->tf}（そのフィールドの）, dl-fn: doc-id -> そのフィールドの長さ。"
+  [field-sources query doc-id & {:keys [k1 b] :or {k1 default-k1 b default-b}}]
+  (let [terms (distinct (tok/tokenize query))]
+    (reduce (fn [acc {:keys [posting-fn n-docs dl-fn avgdl boost]}]
+              (+ acc (* boost (bm25-score posting-fn n-docs dl-fn avgdl terms doc-id :k1 k1 :b b))))
+            0.0 field-sources)))
+
+(defn bm25-multi-field-rank
+  "候補文書を、フィールド合成スコアの降順に並べる。"
+  [field-sources query doc-ids & {:keys [k1 b] :or {k1 default-k1 b default-b}}]
+  (->> doc-ids
+       (map (fn [id] {:doc-id id
+                      :score (bm25-multi-field-score field-sources query id :k1 k1 :b b)}))
+       (sort-by (juxt (comp - :score) :doc-id))))

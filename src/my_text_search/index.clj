@@ -1,13 +1,23 @@
 (ns my-text-search.index
   (:require [my-text-search.tokenizer :as tok]))
 
+(def default-field :text)
+
 (defn empty-index
   []
-  {:postings (sorted-map)
+  {:fields (sorted-map)
    :words (sorted-map)
    :docs {}
-   :doc-lengths {}
    :next-id 0})
+
+(defn- add-field-freqs
+  [f-idx freqs doc-id dl]
+  (-> f-idx
+      (update :postings (fn [p] (reduce (fn [m [t cnt]]
+                                          (update m t (fnil assoc (sorted-map)) doc-id cnt))
+                                        (or p (sorted-map))
+                                        freqs)))
+      (update :doc-lengths (fnil assoc {}) doc-id dl)))
 
 (defn- add-freqs
   [m freqs doc-id]
@@ -16,40 +26,62 @@
           m freqs))
 
 (defn add-document
-  [index text]
-  (let [doc-id (:next-id index)
-        term-freqs (frequencies (tok/tokenize text))
-        word-freqs (frequencies (tok/segments text))
-        dl (reduce + 0 (vals term-freqs))]
-    (-> index
-        (update :docs assoc doc-id text)
-        (update :doc-lengths assoc doc-id dl)
-        (update :postings add-freqs term-freqs doc-id)
-        (update :words add-freqs word-freqs doc-id)
+  [index fields]
+  (let [doc-id (:next-id index)]
+    (-> (reduce
+         (fn [idx [fname text]]
+           (let [freqs (frequencies (tok/tokenize text))
+                 words (frequencies (tok/segments text))
+                 dl (reduce + 0 (vals freqs))]
+             (-> idx
+                 (update-in [:fields fname]
+                            (fnil add-field-freqs
+                                  {:postings (sorted-map) :doc-lengths {}})
+                            freqs doc-id dl)
+                 (update :words add-freqs words doc-id))))
+         index
+         fields)
+        (update :docs assoc doc-id fields)
         (assoc :next-id (inc doc-id)))))
 
-(defn posting
-  [index term]
-  (get-in index [:postings term] (sorted-map)))
+(defn add-text
+  [index text]
+  (add-document index {default-field text}))
 
-(defn word-posting
-  [index word]
-  (get-in index [:words word] (sorted-map)))
+(defn field-posting
+  [index fname term]
+  (get-in index [:fields fname :postings term] (sorted-map)))
 
-(defn doc-text
-  [index doc-id]
-  (get-in index [:docs doc-id]))
+(defn field-doc-length
+  [index fname doc-id]
+  (get-in index [:fields fname :doc-lengths doc-id] 0))
 
-(defn doc-length
-  [index doc-id]
-  (get-in index [:doc-lengths doc-id] 0))
-
-(defn avg-doc-length
-  [index]
-  (let [ls (vals (:doc-lengths index))]
+(defn field-avg-doc-length
+  [index fname]
+  (let [ls (vals (get-in index [:fields fname :doc-lengths]))]
     (if (empty? ls)
       0.0
       (/ (double (reduce + 0 ls)) (count ls)))))
+
+(defn fields
+  [index]
+  (keys (:fields index)))
+
+(defn posting
+  [index term]
+  (field-posting index default-field term))
+(defn doc-length
+  [index doc-id]
+  (field-doc-length index default-field doc-id))
+(defn avg-doc-length
+  [index]
+  (field-avg-doc-length index default-field))
+(defn word-posting
+  [index word]
+  (get-in index [:words word] (sorted-map)))
+(defn doc-text
+  ([index doc-id] (get-in index [:docs doc-id default-field]))
+  ([index doc-id fname] (get-in index [:docs doc-id fname])))
 
 (defn words-with-prefix
   [index prefix]
@@ -58,20 +90,18 @@
        (map (fn [[w ids]] [w ids]))))
 
 (defn stats
-  "索引の健全性を見るための統計。
-   :docs         文書数
-   :terms        term辞書サイズ（ユニーク term 数）= インデックス容量の目安
-   :words        語辞書サイズ
-   :postings     全ポスティング長の合計（term×文書 の総ペア数）
-   :avg-posting  1 term あたり平均文書数 = 検索コストの目安"
   [index]
-  (let [postings (:postings index)
-        term-count (count postings)
-        total (reduce + 0 (map count (vals postings)))]
-    {:docs (count (:docs index))
-     :terms term-count
-     :words (count (:words index))
-     :postings total
-     :avg-posting (if (zero? term-count)
-                    0.0
-                    (double (/ total term-count)))}))
+  {:docs (count (:docs index))
+   :fields (into {} (for [[f fi] (:fields index)] [f (count (:postings fi))]))
+   :words (count (:words index))}
+  ;; (let [postings (:postings index)
+  ;;       term-count (count postings)
+  ;;       total (reduce + 0 (map count (vals postings)))]
+  ;;   {:docs (count (:docs index))
+  ;;    :terms term-count
+  ;;    :words (count (:words index))
+  ;;    :postings total
+  ;;    :avg-posting (if (zero? term-count)
+  ;;                   0.0
+  ;;                   (double (/ total term-count)))})
+  )

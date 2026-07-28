@@ -1,7 +1,7 @@
 (ns my-text-search.store-test
   (:require [clojure.test :refer [deftest is]]
             [my-storage.core :as lsm]
-            [my-text-search.index :as idx]
+            [my-text-search.index :as idx :refer [default-field]]
             [my-text-search.query :as q]
             [my-text-search.store :as store]))
 
@@ -12,7 +12,7 @@
 (deftest posting-persists-across-restart
   (let [dir (temp-dir)]
     (let [db (lsm/open dir)]
-      (store/put-posting! db "日本" (sorted-map 0 1 1 3 5 2))
+      (store/put-field-posting! db default-field "日本" (sorted-map 0 1 1 3 5 2))
       (is (= (sorted-map 0 1 1 3 5 2) (store/get-posting db "日本")))
       (is (nil? (store/get-posting db "焼酎")))     ; 未知の語
       (lsm/close db))
@@ -22,7 +22,7 @@
 
 (deftest index-persists-and-searches-across-restart
   (let [dir (temp-dir)]
-    (let [ix (reduce idx/add-document (idx/empty-index)
+    (let [ix (reduce idx/add-text (idx/empty-index)
                      ["日本酒の醸造" "純米大吟醸の精米" "日本語の文法"])
           db (lsm/open dir)]
       (store/persist-index! db ix)
@@ -36,7 +36,7 @@
 
 (deftest q-search-over-store
   (let [dir (temp-dir)]
-    (let [ix (reduce idx/add-document (idx/empty-index)
+    (let [ix (reduce idx/add-text (idx/empty-index)
                      ["日本酒の醸造" "純米大吟醸の精米" "日本語の文法"])
           db (lsm/open dir)]
       (store/persist-index! db ix)
@@ -51,7 +51,7 @@
 
 (deftest search-docs-attaches-text
   (let [dir (temp-dir)]
-    (let [ix (reduce idx/add-document (idx/empty-index)
+    (let [ix (reduce idx/add-text (idx/empty-index)
                      ["日本酒の醸造" "日本語の文法"])
           db (lsm/open dir)]
       (store/persist-index! db ix)
@@ -70,7 +70,7 @@
 
 (deftest word-dictionary-persists
   (let [dir (temp-dir)]
-    (let [ix (reduce idx/add-document (idx/empty-index) ["日本酒 純米" "日本酒造 蔵元"])
+    (let [ix (reduce idx/add-text (idx/empty-index) ["日本酒 純米" "日本酒造 蔵元"])
           db (lsm/open dir)]
       (store/persist-index! db ix)
       (lsm/close db))
@@ -81,7 +81,7 @@
 
 (deftest scan-words-matches-in-memory
   (let [dir (temp-dir)
-        ix  (reduce idx/add-document (idx/empty-index)
+        ix  (reduce idx/add-text (idx/empty-index)
                     ["日本酒 純米" "日本酒造 蔵元" "日本語 文法" "焼酎 芋"])]
     (let [db (lsm/open dir)]
       (store/persist-index! db ix)
@@ -94,7 +94,7 @@
 
 (deftest wildcard-over-store
   (let [dir (temp-dir)
-        ix  (reduce idx/add-document (idx/empty-index)
+        ix  (reduce idx/add-text (idx/empty-index)
                     ["日本酒 純米" "日本酒造 蔵元" "日本語 文法" "STORE front"])]
     (let [db (lsm/open dir)] (store/persist-index! db ix) (lsm/close db))
     (let [db (lsm/open dir)
@@ -107,7 +107,7 @@
 
 (deftest all-words-returns-full-dictionary
   (let [dir (temp-dir)
-        ix  (reduce idx/add-document (idx/empty-index)
+        ix  (reduce idx/add-text (idx/empty-index)
                     ["日本酒 純米" "日本酒造 蔵元" "焼酎 芋"])]
     (let [db (lsm/open dir)]
       (store/persist-index! db ix)
@@ -119,7 +119,7 @@
 
 (deftest doc-length-persists
   (let [dir (temp-dir)
-        ix  (reduce idx/add-document (idx/empty-index)
+        ix  (reduce idx/add-text (idx/empty-index)
                     ["日本酒" "日本酒 日本酒 日本酒 の 醸造" "焼酎 芋"])]
     (let [db (lsm/open dir)]
       (store/persist-index! db ix)
