@@ -10,35 +10,52 @@
    :docs {}
    :next-id 0})
 
-(defn- add-field-freqs
-  [f-idx freqs doc-id dl]
+(defn- positions-by-token
+  [tokens]
+  (reduce (fn [m [pos t]] (update m t (fnil conj []) pos))
+          {} (map-indexed vector tokens)))
+
+(defn- add-postings 
+  [m tok->pos doc-id]
+  (reduce (fn [acc [t poss]]
+            (update acc t (fnil assoc (sorted-map)) doc-id poss))
+          m tok->pos))
+
+(defn- add-field-positions 
+  [f-idx tok->pos doc-id dl]
   (-> f-idx
-      (update :postings (fn [p] (reduce (fn [m [t cnt]]
-                                          (update m t (fnil assoc (sorted-map)) doc-id cnt))
-                                        (or p (sorted-map))
-                                        freqs)))
+      (update :postings (fnil add-postings (sorted-map)) tok->pos doc-id)
       (update :doc-lengths (fnil assoc {}) doc-id dl)))
 
-(defn- add-freqs
-  [m freqs doc-id]
-  (reduce (fn [acc [k cnt]]
-            (update acc k (fnil assoc (sorted-map)) doc-id cnt))
-          m freqs))
+;; (defn- add-field-freqs
+;;   [f-idx freqs doc-id dl]
+;;   (-> f-idx
+;;       (update :postings (fn [p] (reduce (fn [m [t cnt]]
+;;                                           (update m t (fnil assoc (sorted-map)) doc-id cnt))
+;;                                         (or p (sorted-map))
+;;                                         freqs)))
+;;       (update :doc-lengths (fnil assoc {}) doc-id dl)))
+
+;; (defn- add-freqs
+;;   [m freqs doc-id]
+;;   (reduce (fn [acc [k cnt]]
+;;             (update acc k (fnil assoc (sorted-map)) doc-id cnt))
+;;           m freqs))
 
 (defn add-document
   [index fields]
   (let [doc-id (:next-id index)]
     (-> (reduce
          (fn [idx [fname text]]
-           (let [freqs (frequencies (tok/tokenize text))
-                 words (frequencies (tok/segments text))
-                 dl (reduce + 0 (vals freqs))]
+           (let [tokens (tok/tokenize text)
+                 tok->pos (positions-by-token tokens)
+                 dl (count tokens)
+                 seg->pos (positions-by-token (tok/segments text))]
              (-> idx
                  (update-in [:fields fname]
-                            (fnil add-field-freqs
-                                  {:postings (sorted-map) :doc-lengths {}})
-                            freqs doc-id dl)
-                 (update :words add-freqs words doc-id))))
+                            (fnil add-field-positions {:postings (sorted-map) :doc-lengths {}})
+                            tok->pos doc-id dl)
+                 (update :words add-postings seg->pos doc-id))))
          index
          fields)
         (update :docs assoc doc-id fields)
@@ -93,15 +110,4 @@
   [index]
   {:docs (count (:docs index))
    :fields (into {} (for [[f fi] (:fields index)] [f (count (:postings fi))]))
-   :words (count (:words index))}
-  ;; (let [postings (:postings index)
-  ;;       term-count (count postings)
-  ;;       total (reduce + 0 (map count (vals postings)))]
-  ;;   {:docs (count (:docs index))
-  ;;    :terms term-count
-  ;;    :words (count (:words index))
-  ;;    :postings total
-  ;;    :avg-posting (if (zero? term-count)
-  ;;                   0.0
-  ;;                   (double (/ total term-count)))})
-  )
+   :words (count (:words index))})

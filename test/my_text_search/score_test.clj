@@ -10,7 +10,7 @@
 
 (deftest tf-idf-score-uses-tf-and-idf
   ;; posting-fn を map で差し替え。term "日本": DF=2, term "本酒": DF=1
-  (let [pf {"日本" {0 3, 1 1}, "本酒" {0 3}}
+  (let [pf {"日本" {0 [0 3 5], 1 [1]}, "本酒" {0 [0 5 7]}}
         f  #(get pf %)
         n  4]
     (let [s0 (score/tf-idf-score f n ["日本" "本酒"] 0)
@@ -20,7 +20,7 @@
 
 (deftest rank-orders-by-score-desc
   ;; 同じ tf 構成で、TF の多い文書が上位、同点は doc-id 昇順
-  (let [pf {"あ" {0 1, 1 3, 2 1}}
+  (let [pf {"あ" {0 [0], 1 [0 1 2], 2 [2]}}
         f  #(get pf %)]
     (is (= [1 0 2] (map :doc-id (score/rank f 5 "あ" [0 1 2]))))))
 
@@ -45,7 +45,7 @@
 (deftest bm25-rank-flips-tfidf-for-long-doc
   ;; 短い高純度文書 vs 長い低純度文書。TF-IDF は長い方(tf大)を上位に、
   ;; BM25(b>0) は短い方を上位に逆転させる。
-  (let [pf {"あ" {0 1, 1 2}}
+  (let [pf {"あ" {0 [1], 1 [0 2]}}
         f  #(get pf %)
         dl {0 2, 1 10}
         dlf #(get dl %)

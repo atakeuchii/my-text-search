@@ -47,3 +47,19 @@
 (deftest wildcard-query-detection
   (is (true?  (q/wildcard-query? "日本酒*")))
   (is (false? (q/wildcard-query? "日本酒"))))
+
+(deftest phrase-vs-boolean
+  ;; 日本@位置, 本酒@位置 を直接与える
+  (let [pf {"日本" {0 [0], 1 [3], 2 [2]}    ; doc0:先頭, doc1:位置3, doc2:位置2
+            "本酒" {0 [1], 1 [0], 2 [3]}}    ; doc0:位置1, doc1:位置0, doc2:位置3
+        f  #(get pf %)]
+    ;; Boolean は共起
+    (is (= [0 1 2] (vec (q/search f "日本酒"))))
+    ;; Phrase は隣接(日本の直後に本酒)。doc1 は順序が逆で除外
+    (is (= [0 2] (vec (q/phrase-search f "日本酒"))))))
+
+(deftest phrase-match-single-doc
+  (let [pf {"日本" {0 [0]}, "本酒" {0 [1]}}
+        f  #(get pf %)]
+    (is (true?  (q/phrase-match? f ["日本" "本酒"] 0)))     ; 隣接
+    (is (false? (q/phrase-match? f ["本酒" "日本"] 0)))))   ; 逆順は不一致

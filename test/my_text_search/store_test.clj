@@ -12,12 +12,12 @@
 (deftest posting-persists-across-restart
   (let [dir (temp-dir)]
     (let [db (lsm/open dir)]
-      (store/put-field-posting! db default-field "日本" (sorted-map 0 1 1 3 5 2))
-      (is (= (sorted-map 0 1 1 3 5 2) (store/get-posting db "日本")))
+      (store/put-field-posting! db default-field "日本" (sorted-map 0 [0] 1 [0 1 2] 5 [2 3]))
+      (is (= {0 [0] 1 [0 1 2] 5 [2 3]} (store/get-posting db "日本")))
       (is (nil? (store/get-posting db "焼酎")))     ; 未知の語
       (lsm/close db))
     (let [db2 (lsm/open dir)]                        ; 再起動
-      (is (= (sorted-map 0 1 1 3 5 2) (store/get-posting db2 "日本")))
+      (is (= {0 [0] 1 [0 1 2] 5 [2 3]} (store/get-posting db2 "日本")))
       (lsm/close db2))))
 
 (deftest index-persists-and-searches-across-restart
@@ -28,9 +28,9 @@
       (store/persist-index! db ix)
       (lsm/close db))
     (let [db (lsm/open dir)]
-      (is (= (sorted-map 0 1 2 1) (store/get-posting db "日本")))
-      (is (= (sorted-map 0 1)     (store/get-posting db "本酒")))
-      (is (= "日本酒の醸造"    (store/get-doc db 0)))
+      (is (= {0 [0] 2 [0]} (store/get-posting db "日本")))
+      (is (= {0 [1]} (store/get-posting db "本酒")))
+      (is (= "日本酒の醸造" (store/get-doc db 0)))
       (is (= 3 (store/get-next-id db)))
       (lsm/close db))))
 
@@ -75,8 +75,8 @@
       (store/persist-index! db ix)
       (lsm/close db))
     (let [db (lsm/open dir)]
-      (is (= (sorted-map 0 1) (store/get-word db "日本酒")))
-      (is (= (sorted-map 1 1) (store/get-word db "日本酒造")))
+      (is (= {0 [0]} (store/get-word db "日本酒")))
+      (is (= {1 [0]} (store/get-word db "日本酒造")))
       (lsm/close db))))
 
 (deftest scan-words-matches-in-memory

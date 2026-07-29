@@ -1,5 +1,6 @@
 (ns my-text-search.query
   (:require [my-text-search.tokenizer :as tok]
+            [clojure.set :as set]
             [clojure.string :as str]))
 
 (defn- intersect2
@@ -69,6 +70,26 @@
        (mapcat #(search % query :op op))
        distinct
        sort))
+
+(defn phrase-match?
+  "doc-id が query terms のフレーズ(語順・隣接)を含むか。
+   各 term の文書内位置から相対オフセットを引き、共通の先頭位置があれば一致。"
+  [posting-fn terms doc-id]
+  (let [offset-sets (map-indexed
+                     (fn [i t] (set (map #(- % i) (get (posting-fn t) doc-id))))
+                     terms)]
+    (boolean (and (every? seq offset-sets)
+                  (seq (reduce set/intersection offset-sets))))))
+
+(defn phrase-search
+  "query をフレーズ(語順・隣接)として検索し、一致文書ID(昇順)を返す。
+   位置が重要なので term は distinct しない。"
+  [posting-fn query]
+  (let [terms (vec (tok/tokenize query))]
+    (if (empty? terms)
+      ()
+      (let [candidates (and-postings (map #(keys (posting-fn %)) terms))]
+        (filter #(phrase-match? posting-fn terms %) candidates)))))
 
 (defn hydrate
   "文書ID列に本文を添える。doc-fn: 文書ID -> 本文。

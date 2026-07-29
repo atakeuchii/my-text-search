@@ -24,7 +24,7 @@
    (fn [acc term]
      (let [post (posting-fn term)
            df (count post)
-           tf (get post doc-id 0)]
+           tf (count (get post doc-id))]
        (if (pos? tf)
          (+ acc (* tf (idf n-docs df)))
          acc)))
@@ -49,7 +49,7 @@
     (reduce (fn [acc term]
               (let [post (posting-fn term)
                     df (count post)
-                    tf (get post doc-id 0)]
+                    tf (count (get post doc-id))]
                 (+ acc (bm25-term-score (bm25-idf n-docs df) tf dl avgdl k1 b))))
             0.0 terms)))
 
