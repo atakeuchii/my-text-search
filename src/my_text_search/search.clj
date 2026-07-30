@@ -4,7 +4,8 @@
             [my-text-search.query :as q]
             [my-text-search.fuzzy :as fz]
             [my-text-search.score :as score]
-            [my-text-search.store :as store]))
+            [my-text-search.store :as store]
+            [my-text-search.highlight :as hl]))
 
 (defn search
   [sources query & {:keys [op k] :or {op :and k 1}}]
@@ -55,3 +56,11 @@
                 :else
                 (q/union-search (map :posting-fn srcs) query :op op))]
     (score/bm25-multi-field-rank srcs (strip-notation query) cands)))
+
+(defn ranked-search-with-snippets
+  "マッチング→フィールドboostランキング→スニペット付与、を一気通貫で行う。
+   snippet-field: スニペットを作る対象フィールド。"
+  [store field-boosts query snippet-field & {:keys [op k window] :or {op :and k 1 window 30}}]
+  (let [rows (ranked-search store field-boosts query :op op :k k)]
+    (hl/with-snippets #(store/get-field-doc store snippet-field %)
+      (strip-notation query) rows :window window)))
