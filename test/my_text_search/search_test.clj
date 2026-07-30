@@ -1,5 +1,6 @@
 (ns my-text-search.search-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]
             [my-storage.core :as lsm]
             [my-text-search.index :as idx]
             [my-text-search.store :as store]
@@ -35,4 +36,18 @@
       (is (= 0 (:doc-id (first (search/ranked-search db {:name 3.0 :description 1.0} "獺祭*")))))
       ;; ワイルドカード×説明重視: 説明に獺祭の doc1 が先頭
       (is (= 1 (:doc-id (first (search/ranked-search db {:name 1.0 :description 3.0} "獺祭*")))))
+      (lsm/close db))))
+
+(deftest ranked-search-with-snippets-end-to-end
+  (let [dir (temp-dir)
+        ix  (reduce idx/add-document (idx/empty-index)
+                    [{:name "獺祭" :description "華やかな日本酒です"}
+                     {:name "久保田" :description "すっきりした日本酒だ"}])]
+    (let [db (lsm/open dir)] (store/persist-index! db ix) (lsm/close db))
+    (let [db (lsm/open dir)
+          out (search/ranked-search-with-snippets db {:name 1.0 :description 1.0}
+                                                  "日本酒" :description)]
+      (is (= 2 (count out)))
+      (is (every? :snippet out))
+      (is (every? #(str/includes? (:snippet %) "日本酒") out))
       (lsm/close db))))
