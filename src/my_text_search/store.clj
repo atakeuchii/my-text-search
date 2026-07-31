@@ -5,16 +5,13 @@
   (:import [java.util Base64]))
 
 (def ^:private next-id-key "m:next-id")
-;; (defn- term-key ^String [term] (str "t:" term))
-;; (defn- word-key ^String [word] (str "w:" word))
-;; (defn- doc-key  ^String [doc-id] (str "d:" doc-id))
-;; (defn- len-key  ^String [doc-id] (str "l:" doc-id))
 
 (defn- fterm-key ^String [field term]   (str "t:" (name field) ":" term))
 (defn- flen-key  ^String [field doc-id] (str "l:" (name field) ":" doc-id))
 (defn- ftotal-key ^String [field]       (str "m:total-len:" (name field)))
 (defn- fdoc-key  ^String [field doc-id] (str "d:" doc-id ":" (name field)))
 (defn- word-key  ^String [word]         (str "w:" word))
+(defn- vkey ^String [doc-id attr]       (str "v:" doc-id ":" (name attr)))
 
 (defn- bytes->str
   ^String [^bytes bs]
@@ -39,6 +36,14 @@
   [store word]
   (when-let [s (lsm/get store (word-key word))]
     (codec/decode-posting (str->bytes s))))
+
+(defn put-doc-value!
+  [store doc-id attr value]
+  (lsm/put store (vkey doc-id attr) (str value)))
+
+(defn get-doc-value
+  [store doc-id attr]
+  (lsm/get store (vkey doc-id attr)))
 
 (defn put-field-doc!
   [store field doc-id text]
@@ -100,6 +105,9 @@
   (doseq [[id fields] (:docs index)]
     (doseq [[fname text] fields]
       (put-field-doc! store fname id text)))
+  (doseq [[id attrs] (:doc-values index)]
+    (doseq [[attr value] attrs]
+      (put-doc-value! store id attr value)))
   (set-next-id! store (:next-id index))
   store)
 

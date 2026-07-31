@@ -8,6 +8,7 @@
   {:fields (sorted-map)
    :words (sorted-map)
    :docs {}
+   :doc-values {}
    :next-id 0})
 
 (defn- positions-by-token
@@ -27,24 +28,10 @@
       (update :postings (fnil add-postings (sorted-map)) tok->pos doc-id)
       (update :doc-lengths (fnil assoc {}) doc-id dl)))
 
-;; (defn- add-field-freqs
-;;   [f-idx freqs doc-id dl]
-;;   (-> f-idx
-;;       (update :postings (fn [p] (reduce (fn [m [t cnt]]
-;;                                           (update m t (fnil assoc (sorted-map)) doc-id cnt))
-;;                                         (or p (sorted-map))
-;;                                         freqs)))
-;;       (update :doc-lengths (fnil assoc {}) doc-id dl)))
-
-;; (defn- add-freqs
-;;   [m freqs doc-id]
-;;   (reduce (fn [acc [k cnt]]
-;;             (update acc k (fnil assoc (sorted-map)) doc-id cnt))
-;;           m freqs))
-
 (defn add-document
-  [index fields]
-  (let [doc-id (:next-id index)]
+  ([index fields] (add-document index fields {}))
+  ([index fields attrs]
+   (let [doc-id (:next-id index)]
     (-> (reduce
          (fn [idx [fname text]]
            (let [tokens (tok/tokenize text)
@@ -59,7 +46,12 @@
          index
          fields)
         (update :docs assoc doc-id fields)
-        (assoc :next-id (inc doc-id)))))
+        (update :doc-values assoc doc-id attrs)
+        (assoc :next-id (inc doc-id))))))
+
+(defn doc-value
+  [index doc-id attr]
+  (get-in index [:doc-values doc-id attr]))
 
 (defn add-text
   [index text]

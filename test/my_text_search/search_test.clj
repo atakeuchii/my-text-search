@@ -51,3 +51,19 @@
       (is (every? :snippet out))
       (is (every? #(str/includes? (:snippet %) "日本酒") out))
       (lsm/close db))))
+
+(deftest search-with-facets-returns-results-and-facets
+  (let [dir (temp-dir)
+        ix  (reduce (fn [ix [f a]] (idx/add-document ix f a)) (idx/empty-index)
+                    [[{:description "山口の日本酒"} {:region "山口" :type "大吟醸"}]
+                     [{:description "新潟の日本酒"} {:region "新潟" :type "吟醸"}]
+                     [{:description "新潟の日本酒"} {:region "新潟" :type "大吟醸"}]
+                     [{:description "鹿児島の焼酎"} {:region "鹿児島" :type "芋"}]])]
+    (let [db (lsm/open dir)] (store/persist-index! db ix) (lsm/close db))
+    (let [db (lsm/open dir)
+          {:keys [results facets]}
+          (search/search-with-facets db {:description 1.0} "日本酒" [:region :type])]
+      (is (= #{0 1 2} (set (map :doc-id results))))
+      (is (= {"山口" 1 "新潟" 2} (:region facets)))
+      (is (= {"大吟醸" 2 "吟醸" 1} (:type facets)))
+      (lsm/close db))))
