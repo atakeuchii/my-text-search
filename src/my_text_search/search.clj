@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [my-text-search.tokenizer :as tok]
             [my-text-search.query :as q]
+            [my-text-search.facet :as facet]
             [my-text-search.fuzzy :as fz]
             [my-text-search.score :as score]
             [my-text-search.store :as store]
@@ -64,3 +65,14 @@
   (let [rows (ranked-search store field-boosts query :op op :k k)]
     (hl/with-snippets #(store/get-field-doc store snippet-field %)
       (strip-notation query) rows :window window)))
+
+(defn search-with-facets
+  "検索→フィールドboostランキング + 指定属性のファセット。
+   facet-attrs: 集計する属性のリスト [:region :type]。
+   {:results [{:doc-id :score} ...] :facets {属性 -> {値 -> 件数}}} を返す。"
+  [store field-boosts query facet-attrs & {:keys [op k] :or {op :and k 1}}]
+  (let [rows (ranked-search store field-boosts query :op op :k k)
+        ids (map :doc-id rows)
+        vfns (into {} (for [a facet-attrs] [a #(store/get-doc-value store % a)]))]
+    {:results rows
+     :facets (facet/facets vfns ids)}))

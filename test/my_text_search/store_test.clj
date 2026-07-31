@@ -129,3 +129,14 @@
       (is (= 12 (store/get-total-len db)))
       (is (= 4.0 (store/avg-doc-length db)))
       (lsm/close db))))
+
+(deftest doc-values-persist
+  (let [dir (temp-dir)
+        ix  (-> (idx/empty-index)
+                (idx/add-document {:name "獺祭"} {:region "山口"})
+                (idx/add-document {:name "久保田"} {:region "新潟"}))]
+    (let [db (lsm/open dir)] (store/persist-index! db ix) (lsm/close db))
+    (let [db (lsm/open dir)]
+      (is (= "山口" (store/get-doc-value db 0 :region)))
+      (is (= "新潟" (store/get-doc-value db 1 :region)))
+      (lsm/close db))))

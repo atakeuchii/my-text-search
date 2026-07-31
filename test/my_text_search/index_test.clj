@@ -101,3 +101,12 @@
     (is (= {0 [5]}   (idx/posting ix "醸造")))
     ;; tf は位置数
     (is (= 2 (count (get (idx/posting ix "日本") 0))))))
+
+(deftest doc-values-held
+  (let [ix (-> (idx/empty-index)
+               (idx/add-document {:name "獺祭"} {:region "山口" :type "純米大吟醸"})
+               (idx/add-document {:name "久保田"} {:region "新潟"}))]
+    (is (= "山口" (idx/doc-value ix 0 :region)))
+    (is (= "純米大吟醸" (idx/doc-value ix 0 :type)))
+    (is (nil? (idx/doc-value ix 1 :type)))
+    (is (nil? (idx/doc-value (idx/add-text ix "x") 2 :region)))))
