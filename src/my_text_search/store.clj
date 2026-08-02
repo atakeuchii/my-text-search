@@ -136,3 +136,11 @@
 (defn get-total-len
   [store]
   (get-field-total store idx/default-field))
+
+(defn merge-field-posting! [store field term doc->pos]
+  (let [cur (or (get-field-posting store field term) (sorted-map))]
+    (put-field-posting! store field term (merge cur doc->pos))))
+
+(defn merge-word! [store word doc->pos]
+  (let [cur (or (get-word store word) (sorted-map))]
+    (put-word! store word (merge cur doc->pos))))

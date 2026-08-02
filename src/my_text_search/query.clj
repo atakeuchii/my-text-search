@@ -88,8 +88,15 @@
   (let [terms (vec (tok/tokenize query))]
     (if (empty? terms)
       ()
-      (let [candidates (and-postings (map #(keys (posting-fn %)) terms))]
-        (filter #(phrase-match? posting-fn terms %) candidates)))))
+      (let [postings (into {} (map (fn [t] [t (posting-fn t)]) (distinct terms)))
+            match? (fn [doc-id]
+                     (let [offset-sets (map-indexed
+                                        (fn [i t] (set (map #(- % i) (get (get postings t) doc-id))))
+                                        terms)]
+                       (boolean (and (every? seq offset-sets)
+                                     (seq (reduce set/intersection offset-sets))))))
+            candidates (and-postings (map #(keys (get postings %)) terms))]
+        (filter match? candidates)))))
 
 (defn hydrate
   "文書ID列に本文を添える。doc-fn: 文書ID -> 本文。
